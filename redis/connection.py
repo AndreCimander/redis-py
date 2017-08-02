@@ -576,6 +576,9 @@ class Connection(object):
             return
         try:
             self._sock.shutdown(socket.SHUT_RDWR)
+        except (OSError, socket.error):
+            pass
+        try:
             self._sock.close()
         except socket.error:
             pass
