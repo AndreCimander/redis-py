@@ -2442,6 +2442,8 @@ class PubSub(object):
             raise RuntimeError(
                 'pubsub connection not set: '
                 'did you forget to call subscribe() or psubscribe()?')
+
+        connection.validate()
         if not block and not connection.can_read(timeout=timeout):
             return None
         return self._execute(connection, connection.read_response)
