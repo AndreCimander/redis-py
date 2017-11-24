@@ -57,6 +57,7 @@ SYM_CRLF = b('\r\n')
 SYM_EMPTY = b('')
 
 SERVER_CLOSED_CONNECTION_ERROR = "Connection closed by server."
+TCP_CLOSE = 7
 TCP_CLOSE_WAIT = 8
 
 
@@ -687,7 +688,7 @@ class Connection(object):
             state = ord(self._sock.getsockopt(
                 socket.SOL_TCP, socket.TCP_INFO, 1))
 
-            if state == TCP_CLOSE_WAIT:
+            if state == TCP_CLOSE_WAIT or state == TCP_CLOSE:
                 raise ConnectionError()
 
         except socket.error:
