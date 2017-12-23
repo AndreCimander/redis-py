@@ -2443,10 +2443,17 @@ class PubSub(object):
                 'pubsub connection not set: '
                 'did you forget to call subscribe() or psubscribe()?')
 
-        connection.validate()
-        if not block and not connection.can_read(timeout=timeout):
-            return None
-        return self._execute(connection, connection.read_response)
+        try:
+            connection.validate()
+            if not block and not connection.can_read(timeout=timeout):
+                return None
+            return self._execute(connection, connection.read_response)
+        except ConnectionError:
+            self.connection.clear_connect_callbacks()
+            self.connection_pool.release(connection, reuse=False)
+            self.connection = None
+            raise
+
 
     def psubscribe(self, *args, **kwargs):
         """

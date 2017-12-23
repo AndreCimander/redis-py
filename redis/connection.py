@@ -685,15 +685,10 @@ class Connection(object):
         # example when the Redis server times out the connection due to
         # idleness.
         try:
-            state = ord(self._sock.getsockopt(
-                socket.SOL_TCP, socket.TCP_INFO, 1))
-
-            if state == TCP_CLOSE_WAIT or state == TCP_CLOSE:
+            if self._sock.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR):
                 raise ConnectionError()
-
         except socket.error:
             raise ConnectionError()
-
         return True
 
 
@@ -949,7 +944,6 @@ class ConnectionPool(object):
         self.connection_class = connection_class
         self.connection_kwargs = connection_kwargs
         self.max_connections = max_connections
-
         self.reset()
 
     def __repr__(self):
@@ -960,7 +954,6 @@ class ConnectionPool(object):
 
     def reset(self):
         self.pid = os.getpid()
-        self._created_connections = 0
         self._available_connections = []
         self._in_use_connections = set()
         self._check_lock = threading.Lock()
@@ -994,6 +987,8 @@ class ConnectionPool(object):
             except ConnectionError:
                 # Connection is unusable, close it and move on.
                 connection.disconnect()
+                if connection in self._available_connections:
+                    self._available_connections.remove(connection)
         self._in_use_connections.add(connection)
         return connection
 
@@ -1008,23 +1003,21 @@ class ConnectionPool(object):
 
     def make_connection(self):
         "Create a new connection"
-        if self._created_connections >= self.max_connections:
+        if (len(self._available_connections) + len(self._in_use_connections)) >= self.max_connections:
             raise ConnectionError("Too many connections")
-        self._created_connections += 1
         return self.connection_class(**self.connection_kwargs)
 
-    def release(self, connection):
+    def release(self, connection, reuse=True):
         "Releases the connection back to the pool"
         self._checkpid()
         if connection.pid != self.pid:
             return
         self._in_use_connections.remove(connection)
-        if self._available_connections:
-            # There is already an idle, available connection, we can afford to
-            # shut this one down.
+
+        if reuse:
+            self._available_connections.append(connection)
+        else:
             connection.disconnect()
-            return
-        self._available_connections.append(connection)
 
     def disconnect(self):
         "Disconnects all connections in the pool"
