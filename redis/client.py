@@ -2427,9 +2427,28 @@ class PubSub(object):
             raise RuntimeError(
                 'pubsub connection not set: '
                 'did you forget to call subscribe() or psubscribe()?')
-        if not block and not connection.can_read(timeout=timeout):
-            return None
-        return self._execute(connection, connection.read_response)
+
+        try:
+            connection.validate()
+            if not block and not connection.can_read(timeout=timeout):
+                return None
+            return self._execute(connection, connection.read_response)
+        except ConnectionError:
+            self.connection.clear_connect_callbacks()
+            self.connection_pool.release(connection, reuse=False)
+            self.connection = None
+            raise
+
+
+    def _normalize_keys(self, data):
+        """
+        normalize channel/pattern names to be either bytes or strings
+        based on whether responses are automatically decoded. this saves us
+        from coercing the value for each message coming in.
+        """
+        encode = self.encoder.encode
+        decode = self.encoder.decode
+        return dict([(decode(encode(k)), v) for k, v in iteritems(data)])
 
     def _normalize_keys(self, data):
         """
